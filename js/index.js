@@ -18,7 +18,7 @@ const per_year_variable = 25;
 const defaultAmountSTX = 1000;
 
 // bitcoin price and stx coin price
-var minimumThreshold, APY, btcPrice, stxPrice,
+var minimumThreshold, APY, btcPrice, stxPrice,historicalPrice_STX,historicalPrice_BTC,
     user_minimumThreshold, user_btcPrice, user_stxPrice, user_APY;
 
 var mode = "simple";
@@ -27,9 +27,8 @@ var poolFee = 5;
 
 var ApiCycles, userCycles;
 
-var nowCurrentCycle = 13;
 
-var NowCycleVariables;
+var NowCycleVariables,nowCurrentCycle;
 
 
 function percentRemove(number, percent) {
@@ -46,11 +45,10 @@ const calc = async (per_year) => {
     $("#stx span").text("$" + numberWithCommas(parseFloat(stxPrice).toFixed(2)));
     $("#btc span").text("$" + numberWithCommas(parseFloat(btcPrice).toFixed(2)));
 
-    $("#input-stx").val(numberWithCommas(parseFloat(stxPrice).toFixed(2)));
-    $("#input-btc").val(numberWithCommas(parseFloat(btcPrice).toFixed(2)));
-
     $("#input-stx-amount").val(defaultAmountSTX.toFixed(2));
-    $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(defaultAmountSTX)) * stxPrice).toFixed(2)));
+   
+
+    nowCurrentCycle = meta_info[0].pox.current_cycle.id;
 
     return Array(meta_info[0].pox.current_cycle.id + 1).fill().map((v, i) => i + 1).map(x => calculateAPY(x, per_year));
 }
@@ -59,7 +57,7 @@ const calculateAPY = async (current_cycle, per_year) => {
     const cycle = await fetch(`https://api.stacking.club/api/cycle-info?cycle=${current_cycle}`)
         .then(response => response.json());
 
-    if (current_cycle <= 13) {
+    if (current_cycle <= nowCurrentCycle) {
         const historicalPrices = Object.values(cycle.historicalPrices)[0];
 
         var historicalPricesstx = parseFloat(historicalPrices.stx).toFixed(2);
@@ -84,6 +82,13 @@ const calculateAPY = async (current_cycle, per_year) => {
 
         if (nowCurrentCycle == current_cycle) {
             NowCycleVariables = cycle;
+
+            $("#input-stx").val(numberWithCommas(parseFloat(historicalPricesstx).toFixed(2)));
+            $("#input-btc").val(numberWithCommas(parseFloat(historicalPricesbtc).toFixed(2)));
+            historicalPrice_STX = historicalPricesstx;
+            historicalPrice_BTC = historicalPricesbtc;
+
+            $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(defaultAmountSTX)) * historicalPrice_STX).toFixed(2)));
         }
 
         return { current_cycle, apy: (yearlyRewards / costToStackUsd) * 100, cycle };
@@ -127,12 +132,12 @@ const Main = async () => {
     </div>`;
 
         switch (x.current_cycle) {
-            case 14:
+            case nowCurrentCycle + 1:
                 current_cycle_text = "upcoming";
                 current_cycle_text_color = "orange";
                 rightText = "";
                 break;
-            case 13:
+            case nowCurrentCycle:
                 current_cycle_text = "current";
                 current_cycle_text_color = "green";
                 rightText = `<div class="r">
@@ -145,7 +150,7 @@ const Main = async () => {
                 $("#calc-text-4").html("Ӿ" + numberWithCommas(minimumThreshold));
                 APY = apr;
                 break;
-            case 12:
+            case nowCurrentCycle - 1:
                 rightText = `<div class="r">
             <span class="icon-b">🔥</span>
             <span> Proof-of-Burn</span></div>`;
@@ -239,10 +244,11 @@ function changeMode(mode) {
 
         $(".cycle-length-span").html(cycleLength);
         $("#calc-text-4").html("Ӿ" + numberWithCommas(minimumThreshold));
-        $("#calc-text-1").html("Ӿ" + numberWithCommas((UsdInterest / stxPrice).toFixed(2)));
+        $("#calc-text-1").html("Ӿ" + numberWithCommas((UsdInterest / historicalPrice_STX).toFixed(2)));
         $("#calc-text-2").html("$" + numberWithCommas(UsdInterest));
-        $("#calc-text-3").html("₿" + (UsdInterest / btcPrice).toFixed(9));
-        $(".btc-per-year-h1").attr("btc", (yearUsd / btcPrice).toFixed(9) + " BTC").attr("dollar", `$${numberWithCommas(yearUsd)} (${APY}%)`);
+        $("#calc-text-3").html("₿" + (UsdInterest / historicalPrice_BTC).toFixed(9));
+        $(".btc-per-year-h1").attr("btc", (yearUsd / historicalPrice_BTC).toFixed(9) + " BTC").attr("dollar", `$${numberWithCommas(yearUsd)} (${APY}%)`);
+
 
     } else {
         $(".calc-text-5").show();
@@ -257,11 +263,11 @@ function changeMode(mode) {
 
         $("#calc-text-5").html(poolFee + "%");
 
-        var historicalPricesstx = user_stxPrice;
+        var historicalPricesstx = parseFloat(user_stxPrice).toFixed(2);
 
-        var historicalPricesbtc = user_btcPrice;
+        var historicalPricesbtc = parseFloat(user_btcPrice).toFixed(2);
 
-        var minimumThresholdStx = user_minimumThreshold;
+        var minimumThresholdStx = parseFloat(user_minimumThreshold).toFixed(2);
 
         var cyclesPerYear = per_year_variable;
 
@@ -279,15 +285,16 @@ function changeMode(mode) {
 
         user_APY = (yearlyRewards / costToStackUsd) * 100;
 
-        var UsdInterest = ((USD * (user_APY / 12) / 30 * (cycleLength * cycleDurationEach)) / 100).toFixed(2);
+        var UsdInterest = percentRemove(((USD * (user_APY / 12) / 30 * (cycleLength * cycleDurationEach)) / 100).toFixed(2),poolFee);
         var yearUsd = ((user_APY * USD) / 100).toFixed(2);
 
         $(".cycle-length-span").html(cycleLength);
         $("#calc-text-4").html("Ӿ" + numberWithCommas(user_minimumThreshold));
-        $("#calc-text-1").html("Ӿ" + numberWithCommas(percentRemove((UsdInterest / user_stxPrice), poolFee).toFixed(2)));
-        $("#calc-text-2").html("$" + numberWithCommas(percentRemove(UsdInterest, poolFee).toFixed(2)));
-        $("#calc-text-3").html("₿" + percentRemove(UsdInterest / user_btcPrice, poolFee).toFixed(9));
+        $("#calc-text-1").html("Ӿ" + numberWithCommas((UsdInterest / user_stxPrice).toFixed(2)));
+        $("#calc-text-2").html("$" + numberWithCommas(UsdInterest.toFixed(2)));
+        $("#calc-text-3").html("₿" + (UsdInterest / user_btcPrice).toFixed(9));
         $(".btc-per-year-h1").attr("btc", percentRemove(yearUsd / user_btcPrice, poolFee).toFixed(9) + " BTC").attr("dollar", `$${numberWithCommas(percentRemove(yearUsd, poolFee).toFixed(2))} (${parseFloat(percentRemove(user_APY,poolFee)).toFixed(1)}%)`);
+
 
     }
 }
@@ -311,7 +318,7 @@ $(document).on("input", "#input-usd-provision-price", function () {
         val = "1";
     }
     if (mode == "simple") {
-        $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / stxPrice).toFixed(2)));
+        $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / historicalPrice_STX).toFixed(2)));
     } else {
         $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / user_stxPrice).toFixed(2)));
     }
@@ -325,7 +332,7 @@ $(document).on("focusout", "#input-usd-provision-price", function () {
     }
 
     if (mode == "simple") {
-        $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / stxPrice).toFixed(2)));
+        $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / historicalPrice_STX).toFixed(2)));
     } else {
         $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / user_stxPrice).toFixed(2)));
     }
@@ -339,7 +346,7 @@ $(document).on("input", "#input-stx-amount", function () {
     }
 
     if (mode == "simple") {
-        $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) * stxPrice).toFixed(2)));
+        $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) * historicalPrice_STX).toFixed(2)));
     } else {
         $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) * user_stxPrice).toFixed(2)));
     }
@@ -354,7 +361,7 @@ $(document).on("focusout", "#input-stx-amount", function () {
     }
 
     if (mode == "simple") {
-        $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) * stxPrice).toFixed(2)));
+        $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) * historicalPrice_STX).toFixed(2)));
     } else {
         $("#input-usd-provision-price").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) * user_stxPrice).toFixed(2)));
     }
@@ -433,7 +440,7 @@ $(document).on("click", ".tab-btn > button:not(.active)", function () {
     var val = $("#input-usd-provision-price").val();
 
     if (mode == "simple") {
-        $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / stxPrice).toFixed(2)));
+        $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / historicalPrice_STX).toFixed(2)));
     } else {
         $("#input-stx-amount").val(numberWithCommas((parseFloat(numberWithRemoveCommas(val)) / user_stxPrice).toFixed(2)));
     }
