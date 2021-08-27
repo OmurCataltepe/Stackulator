@@ -271,4 +271,7 @@ footer {
   footer img {
     width: 120px; }
 
+.swiper-container {
+  overflow: hidden; }
+
 /*# sourceMappingURL=main.css.map */
